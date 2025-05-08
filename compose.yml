@@ -1,0 +1,21 @@
+services:
+  app:
+    image: fastapi_interview
+    container_name: FastAPI-interview
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    container_name: fastapi_interview_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 5

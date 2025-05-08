@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+google-cloud-firestore
+redis
+python-dotenv
+pytest
+pytest-asyncio
+slowapi
+email-validator
