@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 import json
 from core.connections import db,r
 from models.booking_model import Slot, BookingStatus
@@ -42,7 +42,7 @@ def create_booked_slot(slot: Slot) -> Slot:
     """
     slot_id = str(slot.date)
     slot_validation(slot)
-    if not check_slot_availability(slot.date):
+    if not check_slot_availability(slot_id):
         raise HTTPException(status_code=409, detail="Slot already booked")
 
     booking_dict = slot.booking.model_dump()
@@ -76,12 +76,11 @@ def check_slot_availability(slot_id: str) -> bool:
         raise e
 
     slot_ref = db.collection("slots").document(slot_id).get()
-
-    if not slot_ref:
-        return True  
+    if slot_ref.exists:
+        r.set(slot_id, json.dumps(slot_ref.to_dict()), ex=60)
+        return False  
     
-    r.set(slot_id, json.dumps(slot_ref.to_dict()), ex=60)
-    return False 
+    return True 
 
 
 def get_slot_info(slot_id: str) -> Slot:
@@ -152,7 +151,7 @@ def delete_booked_slot(slot_id: str) -> str:
     try:
         caches_slot = r.get(slot_id)
         if caches_slot:
-            r.delete(caches_slot)
+            r.delete(slot_id)
         db.collection("slots").document(slot_id).delete()
         return f"Slot {slot_id} deleted successfully"
     except Exception as e:
@@ -205,3 +204,31 @@ async def delete_all_booked_slots() -> str:
         print(f"Error deleting all booked slots: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
+
+async def get_available_slots(day: datetime) -> list[str]:
+    """
+    Fetch all available slots for a given day.
+    """
+    try:
+        booked_slots = await get_all_booked_slots_id()
+        # Generate all possible slot IDs for the given day
+        start_time = time(9, 0)
+        end_time = time(16, 30)
+        interval_minutes = 30
+
+        day = day.date()
+
+        all_slots = []
+        current_time = datetime.combine(day, start_time)
+        end_datetime = datetime.combine(day, end_time)
+
+        while current_time <= end_datetime:
+            all_slots.append(str(current_time))
+            current_time += timedelta(minutes=interval_minutes)
+
+        available_slots = [slot for slot in all_slots if slot not in booked_slots]
+
+        return available_slots
+    except Exception as e:
+        print(f"Error fetching available slots: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
