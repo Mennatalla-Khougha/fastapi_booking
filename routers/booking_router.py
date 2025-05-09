@@ -1,5 +1,5 @@
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from models.booking_model import Slot
 from services.booking_service import check_slot_availability, create_booked_slot, delete_all_booked_slots, get_all_booked_slots, \
     get_all_booked_slots_id, get_available_slots, get_slot_info, delete_booked_slot, update_booked_slot
@@ -18,7 +18,7 @@ def get_slots(slot_id: str):
     except HTTPException as e:
         raise e 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
 
 
 @router.post("/book_slot", response_model=Slot)
@@ -54,7 +54,7 @@ async def get_all_booked_slots_id_endpoint():
     try:
         return await get_all_booked_slots_id()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
     
 
 @router.get("/", response_model=list[Slot])
@@ -65,7 +65,7 @@ async def get_all_booked_slots_endpoint():
     try:
         return await get_all_booked_slots()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        e
 
 
 @router.delete("/delete_slot", response_model=str)
@@ -102,11 +102,12 @@ async def delete_all_booked_slots_endpoint():
     
 
 @router.get("/get_available_slots", response_model=list[str])
-async def get_available_slots_endpoint(day: datetime):
+async def get_available_slots_endpoint(day: str = Query(...)):
     """
     Endpoint to get all available slots.
     """
     try:
-        return await get_available_slots(day)
+        day_datetime = datetime.fromisoformat(day)
+        return await get_available_slots(day_datetime)
     except HTTPException as e:
         raise e

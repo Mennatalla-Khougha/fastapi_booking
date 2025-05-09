@@ -43,6 +43,7 @@ def create_booked_slot(slot: Slot) -> Slot:
     slot_id = str(slot.date)
     slot_validation(slot)
     if not check_slot_availability(slot_id):
+        print("inside create")
         raise HTTPException(status_code=409, detail="Slot already booked")
 
     booking_dict = slot.booking.model_dump()
@@ -104,7 +105,7 @@ def get_slot_info(slot_id: str) -> Slot:
 
     except Exception as e:
         print(f"Error fetching slot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
 
 
 async def get_all_booked_slots_id() -> list[str]:
@@ -122,7 +123,7 @@ async def get_all_booked_slots_id() -> list[str]:
 
     except Exception as e:
         print(f"Error fetching booked slots: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
 
 
 async def get_all_booked_slots() -> list[Slot]:
@@ -141,7 +142,7 @@ async def get_all_booked_slots() -> list[Slot]:
 
     except Exception as e:
         print(f"Error fetching booked slots: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
 
 
 def delete_booked_slot(slot_id: str) -> str:
@@ -156,7 +157,7 @@ def delete_booked_slot(slot_id: str) -> str:
         return f"Slot {slot_id} deleted successfully"
     except Exception as e:
         print(f"Error deleting booked slot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
 
 
 async def update_booked_slot(date: datetime, slot: Slot) -> str:
@@ -167,27 +168,25 @@ async def update_booked_slot(date: datetime, slot: Slot) -> str:
         valid = slot_validation(slot)
         slot_id = str(date)
         slot_ref = db.collection("slots").document(slot_id).get()
-        print(f"Slot ref: done")
         if not slot_ref.exists:
             raise HTTPException(status_code=404, detail="Slot not found")
         if not valid:
             raise HTTPException(status_code=400, detail="Invalid slot data")
-        await asyncio.to_thread(
-            lambda: delete_booked_slot(slot_id)
-        )
-        print(f"first async: done")
 
         await asyncio.to_thread(
             lambda: create_booked_slot(slot)
         )
-        print(f"second async: done")
+
+        await asyncio.to_thread(
+            lambda: delete_booked_slot(slot_id)
+        )
 
         slot_id = str(slot.date)
 
         return f"Slot {slot_id} updated successfully"
     except Exception as e:
         print(f"Error updating booked slot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
 
 
 async def delete_all_booked_slots() -> str:
@@ -202,7 +201,7 @@ async def delete_all_booked_slots() -> str:
         return "All booked slots deleted successfully"
     except Exception as e:
         print(f"Error deleting all booked slots: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
     
 
 async def get_available_slots(day: datetime) -> list[str]:
@@ -210,25 +209,58 @@ async def get_available_slots(day: datetime) -> list[str]:
     Fetch all available slots for a given day.
     """
     try:
-        booked_slots = await get_all_booked_slots_id()
-        # Generate all possible slot IDs for the given day
+        # Fetch booked slots in ISO format
+        if day.weekday() in [4, 5]:
+            return []
+ 
+        booked_slots = [
+            datetime.fromisoformat(slot.replace(" ", "T")).isoformat()
+            for slot in await get_all_booked_slots_id()
+        ]
+        print(f"Booked slots: {booked_slots}")
+
+        # Define working hours and interval
         start_time = time(9, 0)
         end_time = time(16, 30)
         interval_minutes = 30
 
-        day = day.date()
+        # Ensure `day` is a date object
+        if isinstance(day, str):
+            day = datetime.fromisoformat(day).date()
+        else:
+            day = day.date()
 
+        # Adjust start time for the current day
+        if day == datetime.now().date():
+            now = datetime.now()
+            minutes = (now.minute // interval_minutes + 1) * interval_minutes
+            start_time = time(now.hour, minutes % 60)
+            if minutes >= 60:
+                start_time = time(now.hour + 1, 0)
+            start_time = max(start_time, time(9, 0))
+
+        # Generate all possible slots for the day
         all_slots = []
         current_time = datetime.combine(day, start_time)
         end_datetime = datetime.combine(day, end_time)
 
         while current_time <= end_datetime:
-            all_slots.append(str(current_time))
+            all_slots.append(current_time.isoformat())  # Keep slots in ISO format
             current_time += timedelta(minutes=interval_minutes)
 
-        available_slots = [slot for slot in all_slots if slot not in booked_slots]
+        # Filter out booked slots
+        available_slots = [
+            slot for slot in all_slots if slot not in booked_slots
+        ]
+        print(f"Available slot: {available_slots}")
 
-        return available_slots
+        # Format available slots as HH:MM AM/PM
+        formatted_available_slots = [
+            datetime.fromisoformat(slot).strftime("%I:%M %p") for slot in available_slots
+        ]
+        # print(f"Available slots: {formatted_available_slots}")
+
+        return formatted_available_slots
     except Exception as e:
         print(f"Error fetching available slots: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise e
