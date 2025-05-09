@@ -1,92 +1,108 @@
-from datetime import datetime
-from re import A
-
-from requests import get
-from core.connections import db
-from models.booking_model import Slot, BookingInfo, BookingStatus
+from datetime import datetime, time
+import json
+from core.connections import db,r
+from models.booking_model import Slot, BookingStatus
 from fastapi import HTTPException
 import asyncio
 
-#  TODO: Add redis to get, delete, update and set the slot
+
+
+def slot_validation(slot: Slot) -> bool:
+    """
+    Validate the slot information.
+    """
+    if not slot.booking:
+        raise ValueError("Booking information must be provided to book a slot.")
+
+    now = datetime.now()
+    if slot.date < now:
+        raise HTTPException(status_code=400, detail="Cannot book a past date")
+    slot_day = slot.date.weekday()
+    if slot_day in [4, 5]:
+        raise HTTPException(status_code=400, detail="Booking is not available on Friday and Saturday")
+    slot_time = slot.date.time()
+    start_time = time(9, 0)
+    end_time = time(16, 30)
+    print(f"Slot time: {slot_time}, Start time: {start_time}, End time: {end_time}")
+    if not (start_time <= slot_time <= end_time):
+        raise HTTPException(status_code=400, detail="Booking time must be between 9:00 AM and 4:30 PM")
+    if slot_time.minute not in [0, 30]:
+        raise HTTPException(status_code=400, detail="Booking time must be on the hour or half-past the hour (e.g., 9:00, 9:30)")
+    if slot_time.second != 0:
+        raise HTTPException(status_code=400, detail="Booking time must have 0 seconds (e.g., 9:00:00, 9:30:00)")
+
+    return True
+
+    # TODO: Add validation for booking info fields
+
 
 def create_booked_slot(slot: Slot) -> Slot:
     """
     Creates a booked slot with the provided booking information.
-
-    Args:
-        slot_id (str): Unique identifier for the slot.
-        date (datetime): Date of the booking.
-        time (datetime): Time of the booking.
-        booking_info (List[BookingInfo]): List of booking information.
-
-    Returns:
-        Slot: A Slot object with the booking details.
     """
-    # TODO:Add validation for date not friday and saturday
-    # TODO: Add validation for time between 9 to 4:30
-    # TODO: Add validation for time not in 30 minutes interval
-    # TODO: Add validation for booking info fields 
-    
     slot_id = str(slot.date)
-    if slot.date < datetime.now():
-        raise HTTPException(status_code=400, detail="Cannot book a past date")
-
+    slot_validation(slot)
     if not check_slot_availability(slot.date):
         raise HTTPException(status_code=409, detail="Slot already booked")
 
-    if not slot.booking:
-        raise ValueError("Booking information must be provided to book a slot.")
-    
     booking_dict = slot.booking.model_dump()
 
-    # Generate a unique slot ID based on date and time
     slot_doc = db.collection("slots").document(slot_id)
     slot_date = {
         "id": slot_id,
-        "date": slot.date,
+        "date": slot.date.isoformat(),
         "status": BookingStatus.booked,
         "booking": booking_dict
     }
 
     slot_doc.set(slot_date)
 
-    return Slot(**slot_date)
+    slot_json = Slot(**slot_date)
+
+    r.set(slot_id, json.dumps(slot_date), ex=60*5)
+
+    return slot_json
 
 
-def check_slot_availability(date: datetime) -> bool:
+def check_slot_availability(slot_id: str) -> bool:
     """
     Check if a slot is available for booking.
-
-    Args:
-        date (datetime): Date of the booking.
-
-    Returns:
-        bool: True if the slot is available, False otherwise.
     """
-    slot_id = str(date)
+    try:
+        cached_slot = r.get(slot_id) 
+        if cached_slot:
+            return False
+    except Exception as e:
+        raise e
+
     slot_ref = db.collection("slots").document(slot_id).get()
+
+    if not slot_ref:
+        return True  
     
-    if slot_ref.exists:
-        return False  # Slot already booked
-    return True  # Slot is available
+    r.set(slot_id, json.dumps(slot_ref.to_dict()), ex=60)
+    return False 
 
 
-def get_slot_info(date: datetime) -> Slot:
+def get_slot_info(slot_id: str) -> Slot:
     """
     Fetch a slot by its time.
     """
     try:
-        slot_id = str(date)
+        cached_slot = r.get(slot_id)
+        if cached_slot:
+            return json.loads(cached_slot)
         slot_ref = db.collection("slots").document(slot_id)
         slot_doc = slot_ref.get()
-        
+
         if not slot_doc.exists:
             raise HTTPException(status_code=404, detail="Slot not found")
-        
-        # Convert Firestore document to a dictionary
+
         slot_data = slot_doc.to_dict()
+
+        r.set(slot_id, json.dumps(slot_data), ex=60)
         return Slot(**slot_data)
-    
+
     except Exception as e:
         print(f"Error fetching slot: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -104,7 +120,7 @@ async def get_all_booked_slots_id() -> list[str]:
         ids = [doc.id for doc in docs]
 
         return ids
-    
+
     except Exception as e:
         print(f"Error fetching booked slots: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -123,10 +139,69 @@ async def get_all_booked_slots() -> list[Slot]:
             booked_slots.append(slot_data)
 
         return booked_slots
-    
+
     except Exception as e:
         print(f"Error fetching booked slots: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# TODO: Add a function to delete a booked slot
-# TODO: Add a function to update a booked slot
+
+def delete_booked_slot(slot_id: str) -> str:
+    """
+    Delete a booked slot by its ID.
+    """
+    try:
+        caches_slot = r.get(slot_id)
+        if caches_slot:
+            r.delete(caches_slot)
+        db.collection("slots").document(slot_id).delete()
+        return f"Slot {slot_id} deleted successfully"
+    except Exception as e:
+        print(f"Error deleting booked slot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def update_booked_slot(date: datetime, slot: Slot) -> str:
+    """
+    Update a booked slot by its ID.
+    """
+    try:
+        valid = slot_validation(slot)
+        slot_id = str(date)
+        slot_ref = db.collection("slots").document(slot_id).get()
+        print(f"Slot ref: done")
+        if not slot_ref.exists:
+            raise HTTPException(status_code=404, detail="Slot not found")
+        if not valid:
+            raise HTTPException(status_code=400, detail="Invalid slot data")
+        await asyncio.to_thread(
+            lambda: delete_booked_slot(slot_id)
+        )
+        print(f"first async: done")
+
+        await asyncio.to_thread(
+            lambda: create_booked_slot(slot)
+        )
+        print(f"second async: done")
+
+        slot_id = str(slot.date)
+
+        return f"Slot {slot_id} updated successfully"
+    except Exception as e:
+        print(f"Error updating booked slot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def delete_all_booked_slots() -> str:
+    """
+    Delete all booked slots asynchronously.
+    """
+    try:
+        ids = await get_all_booked_slots_id()
+
+        await asyncio.gather(*[asyncio.to_thread(delete_booked_slot, id) for id in ids])
+
+        return "All booked slots deleted successfully"
+    except Exception as e:
+        print(f"Error deleting all booked slots: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    

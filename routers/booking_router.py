@@ -1,19 +1,20 @@
-from datetime import date, datetime
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from models.booking_model import Slot, BookingInfo, BookingStatus
-from services.booking_service import  check_slot_availability, create_booked_slot, get_all_booked_slots, get_all_booked_slots_id, get_slot_info
+from models.booking_model import Slot
+from services.booking_service import check_slot_availability, create_booked_slot, delete_all_booked_slots, get_all_booked_slots, \
+    get_all_booked_slots_id, get_slot_info, delete_booked_slot, update_booked_slot
 
 router = APIRouter()
 
     
 @router.get("/slot", response_model=Slot)
-async def get_slots(date: datetime):
+def get_slots(slot_id: str):
     """
-    Endpoint to get all available slots.
+    Endpoint to get all slot info.
     """
     try:
         # Fetch all slots from the database
-        return get_slot_info(date)
+        return get_slot_info(slot_id)
     except HTTPException as e:
         raise e 
     except Exception as e:
@@ -24,15 +25,6 @@ async def get_slots(date: datetime):
 async def book_slot(slot:Slot):
     """
     Endpoint to book a slot with the provided booking information.
-
-    Args:
-        slot_id (str): Unique identifier for the slot.
-        date (datetime): Date of the booking.
-        time (datetime): Time of the booking.
-        booking_info (List[BookingInfo]): List of booking information.
-
-    Returns:
-        Slot: A Slot object with the booking details.
     """
     try:
         if not slot.booking:
@@ -47,18 +39,12 @@ async def book_slot(slot:Slot):
     
 
 @router.get("/check_slot", response_model=bool)
-async def check_slot_availability_endpoint(date: datetime):
+async def check_slot_availability_endpoint(slot_id: str):
     """
     Endpoint to check if a slot is available for booking.
-
-    Args:
-        date (datetime): Date of the booking.
-
-    Returns:
-        bool: True if the slot is available, False otherwise.
     """
     try:
-        return check_slot_availability(date)
+        return check_slot_availability(slot_id)
     except Exception as e:
         raise e
     
@@ -81,5 +67,35 @@ async def get_all_booked_slots_endpoint():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# TODO: Add a endpoint to delete a booked slot
-# TODO: Add a endpoint to update a booked slot
+
+@router.delete("/delete_slot", response_model=str)
+async def delete_booked_slot_endpoint(slot_id: str):
+    """
+    Endpoint to delete a booked slot.
+    """
+    try:
+        return delete_booked_slot(slot_id)
+
+    except HTTPException as e:
+        raise e
+
+@router.put("/update_slot", response_model=str)
+async def update_booked_slot_endpoint(date: datetime, slot: Slot):
+    """
+    Update a booked slot by its ID.
+    """
+    try:
+        return await update_booked_slot(date, slot)
+    except HTTPException as e:
+        raise e
+
+
+@router.delete("/delete_all_slots", response_model=str)
+async def delete_all_booked_slots_endpoint():
+    """
+    Endpoint to delete all booked slots.
+    """
+    try:
+        return await delete_all_booked_slots()
+    except HTTPException as e:
+        raise e
