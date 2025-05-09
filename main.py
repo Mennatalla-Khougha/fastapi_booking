@@ -1,5 +1,6 @@
 from typing import Collection
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from core.connections import db, r
 from google.cloud import firestore
 from routers import booking_router
@@ -7,6 +8,9 @@ from routers import booking_router
 app = FastAPI()
 
 app.include_router(booking_router.router, prefix="/booking", tags=["booking"])
+
+import os
+app.mount("/static", StaticFiles(directory=os.path.join(os.getcwd(), "static")), name="static")
 
 
 @app.get("/")

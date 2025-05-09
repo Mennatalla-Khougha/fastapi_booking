@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Date & Time Picker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 p-4">
+  <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-sm">
+    <!-- Loading indicator -->
+    <div id="loadingIndicator" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white p-5 rounded-lg shadow-lg">
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto"></div>
+        <p class="mt-3 text-center">Loading...</p>
+      </div>
+    </div>
+
+    <!-- Step 1: Date & Time Selection -->
+    <div id="step1">
+      <h2 class="text-xl font-semibold text-slate-800 mb-6">Select a Date & Time</h2>
+    
+      <!-- Shared container for calendar and time slots -->
+      <div class="flex flex-col md:flex-row gap-6">
+        <!-- Calendar Section -->
+        <div class="flex-1">
+          <!-- Month navigation -->
+          <div class="flex items-center justify-between mb-6">
+            <button id="prevMonth" class="p-2 rounded-full hover:bg-gray-100">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-500">
+                <path d="m15 18-6-6 6-6"/>
+              </svg>
+            </button>
+            <span id="monthYear" class="text-gray-800 font-medium">May 2025</span>
+            <button id="nextMonth" class="p-2 rounded-full hover:bg-gray-100 bg-orange-50">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-orange-500">
+                <path d="m9 18 6-6-6-6"/>
+              </svg>
+            </button>
+          </div>
+    
+          <!-- Calendar -->
+          <div class="mb-6">
+            <div class="grid grid-cols-7 gap-1 mb-2">
+              <div class="w-10 h-10 flex items-center justify-center text-xs text-gray-600 font-medium">SUN</div>
+              <div class="w-10 h-10 flex items-center justify-center text-xs text-gray-600 font-medium">MON</div>
+              <div class="w-10 h-10 flex items-center justify-center text-xs text-gray-600 font-medium">TUE</div>
+              <div class="w-10 h-10 flex items-center justify-center text-xs text-gray-600 font-medium">WED</div>
+              <div class="w-10 h-10 flex items-center justify-center text-xs text-gray-600 font-medium">THU</div>
+              <div class="w-10 h-10 flex items-center justify-center text-xs text-gray-600 font-medium">FRI</div>
+              <div class="w-10 h-10 flex items-center justify-center text-xs text-gray-600 font-medium">SAT</div>
+            </div>
+            <div id="calendarDays" class="grid grid-cols-7 gap-1">
+              <!-- Calendar days will be inserted here by JavaScript -->
+            </div>
+          </div>
+        </div>
+    
+        <!-- Time Slots Section -->
+        <div class="flex-1">
+          <div class="mb-4">
+            <p id="selectedDateText" class="text-gray-800">Loading date...</p>
+          </div>
+    
+          <div id="timeSlots" class="space-y-3 overflow-y-auto max-h-96 border border-gray-200 rounded-lg p-4">
+            <div class="text-center py-8 text-gray-500">
+              Select a date to view available time slots
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Time Confirmation -->
+    <div id="step2" class="hidden">
+      <h2 class="text-xl font-semibold text-slate-800 mb-6">Confirm Your Time</h2>
+      
+      <div class="flex gap-4 mb-6">
+        <div id="selectedTimeDisplay" class="flex-1 bg-gray-600 text-white py-3 px-4 rounded-lg flex items-center justify-center font-medium">
+          11:30am
+        </div>
+        <button id="nextButton" class="flex-1 bg-orange-500 text-white py-3 px-4 rounded-lg flex items-center justify-center font-medium hover:bg-orange-600">
+          Next
+        </button>
+      </div>
+      
+      <button id="backToStep1" class="text-gray-500 hover:text-gray-700">
+        ← Back to calendar
+      </button>
+    </div>
+
+    <!-- Step 3: Booking Form -->
+    <div id="step3" class="hidden">
+      <h2 class="text-xl font-semibold text-slate-800 mb-6">Enter Details</h2>
+      
+      <form id="bookingForm" class="space-y-4">
+        <!-- Hidden fields for date and time -->
+        <input type="hidden" id="bookingDate" name="bookingDate">
+        <input type="hidden" id="bookingTime" name="bookingTime">
+        
+        <div>
+          <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name <span class="text-red-500">*</span></label>
+          <input type="text" id="name" name="name" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+        </div>
+        
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email <span class="text-red-500">*</span></label>
+          <input type="email" id="email" name="email" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+        </div>
+        
+        <div>
+          <button type="button" id="addGuests" class="text-orange-500 border border-orange-500 rounded-full px-4 py-1 text-sm hover:bg-orange-50">
+            Add Guests
+          </button>
+        </div>
+        
+        <div>
+          <label for="company" class="block text-sm font-medium text-gray-700 mb-1">Company <span class="text-red-500">*</span></label>
+          <input type="text" id="company" name="company" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+        </div>
+        
+        <div>
+          <label for="country" class="block text-sm font-medium text-gray-700 mb-1">Country <span class="text-red-500">*</span></label>
+          <input type="text" id="country" name="country" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+        </div>
+        
+        <div>
+          <label for="whatsapp" class="block text-sm font-medium text-gray-700 mb-1">WhatsApp Number</label>
+          <div class="flex">
+            <div class="bg-white border border-gray-300 rounded-l-lg px-3 py-2 flex items-center">
+              <img src="https://flagcdn.com/w20/eg.png" alt="Egypt" class="h-4">
+            </div>
+            <input type="tel" id="whatsapp" name="whatsapp" class="flex-1 px-3 py-2 border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent">
+          </div>
+        </div>
+        
+        <div>
+          <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">Please share anything that will help prepare for our meeting.</label>
+          <textarea id="notes" name="notes" rows="4" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"></textarea>
+        </div>
+        
+        <div class="text-sm text-gray-600">
+          By proceeding, you confirm that you have read and agree to
+          <a href="#" class="text-orange-500 hover:underline">Terms of Use</a> and 
+          <a href="#" class="text-orange-500 hover:underline">Privacy Notice</a>.
+        </div>
+        
+        <div class="pt-4">
+          <button type="submit" class="w-full bg-orange-500 text-white py-3 px-4 rounded-lg flex items-center justify-center font-medium hover:bg-orange-600">
+            Book Appointment
+          </button>
+        </div>
+        
+        <div class="pt-2">
+          <button type="button" id="backToStep2" class="text-gray-500 hover:text-gray-700">
+            ← Back
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // DOM elements
+      const step1 = document.getElementById('step1');
+      const step2 = document.getElementById('step2');
+      const step3 = document.getElementById('step3');
+      const calendarDays = document.getElementById('calendarDays');
+      const monthYearElement = document.getElementById('monthYear');
+      const selectedDateText = document.getElementById('selectedDateText');
+      const timeSlotsContainer = document.getElementById('timeSlots');
+      const prevMonthButton = document.getElementById('prevMonth');
+      const nextMonthButton = document.getElementById('nextMonth');
+      const selectedTimeDisplay = document.getElementById('selectedTimeDisplay');
+      const nextButton = document.getElementById('nextButton');
+      const backToStep1 = document.getElementById('backToStep1');
+      const backToStep2 = document.getElementById('backToStep2');
+      const bookingForm = document.getElementById('bookingForm');
+      const loadingIndicator = document.getElementById('loadingIndicator');
+      const bookingDateInput = document.getElementById('bookingDate');
+      const bookingTimeInput = document.getElementById('bookingTime');
+      
+      // Initial date (today)
+      let currentDate = new Date();
+      let selectedDate = new Date();
+      let selectedTime = null;
+      let availableTimeSlots = [];
+      
+      // Format date for API calls (YYYY-MM-DD)
+      function formatDateForAPI(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      
+      // Show loading indicator
+      function showLoading() {
+        loadingIndicator.classList.remove('hidden');
+      }
+      
+      // Hide loading indicator
+      function hideLoading() {
+        loadingIndicator.classList.add('hidden');
+      }
+      
+      // Fetch available time slots from API
+      async function fetchAvailableTimeSlots(date) {
+        showLoading();
+        timeSlotsContainer.innerHTML = '<div class="text-center py-8">Loading available times...</div>';
+        
+        try {
+          const formattedDate = formatDateForAPI(date);
+          const response = await fetch(`http://localhost:8000/booking/get_available_slots?day=${formattedDate}`);
+          
+          if (!response.ok) {
+            throw new Error('Failed to fetch available time slots');
+          }
+          
+          const data = await response.json();
+          console.log("Available time slots:", data); // Debug log
+          availableTimeSlots = data || [];
+          
+          renderTimeSlots();
+        } catch (error) {
+          console.error('Error fetching time slots:', error);
+          timeSlotsContainer.innerHTML = `
+            <div class="text-center py-8 text-red-500">
+              <p>Failed to load time slots.</p>
+              <button class="mt-2 text-orange-500 underline" onclick="fetchAvailableTimeSlots(selectedDate)">
+                Try again
+              </button>
+            </div>
+          `;
+          
+          // For demo purposes, use sample time slots
+          availableTimeSlots = ["11:30am", "12:00pm", "12:30pm", "1:00pm", "1:30pm", "2:00pm", "2:30pm"];
+          renderTimeSlots();
+        } finally {
+          hideLoading();
+        }
+      }
+      
+      // Initialize calendar
+      renderCalendar();
+      updateSelectedDateText();
+      
+      // Fetch initial time slots for today
+      fetchAvailableTimeSlots(selectedDate);
+      
+      // Event listeners for month navigation
+      prevMonthButton.addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() - 1);
+        renderCalendar();
+      });
+      
+      nextMonthButton.addEventListener('click', () => {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        renderCalendar();
+      });
+      
+      // Event listeners for navigation between steps
+      nextButton.addEventListener('click', () => {
+        step2.classList.add('hidden');
+        step3.classList.remove('hidden');
+        
+        // Set the hidden form fields
+        bookingDateInput.value = formatDateForAPI(selectedDate);
+        bookingTimeInput.value = selectedTime;
+      });
+      
+      backToStep1.addEventListener('click', () => {
+        step2.classList.add('hidden');
+        step1.classList.remove('hidden');
+      });
+      
+      backToStep2.addEventListener('click', () => {
+        step3.classList.add('hidden');
+        step2.classList.remove('hidden');
+      });
+      
+// Handle form submission
+bookingForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  showLoading();
+
+  const formData = new FormData(bookingForm);
+
+  const [hours, minutesWithPeriod] = bookingTimeInput.value.split(':');
+  const minutes = minutesWithPeriod.slice(0, 2); 
+  const isPM = bookingTimeInput.value.toLowerCase().includes('pm');
+  console.log(typeof bookingTimeInput)
+  console.log(bookingTimeInput)
+  let formattedHours = parseInt(hours, 10);
+
+  // Convert to 24-hour format if needed
+  if (isPM && formattedHours !== 12) {
+    formattedHours += 12;
+  } else if (!isPM && formattedHours === 12) {
+    formattedHours = 0;
+  }
+
+  const formattedTime = `${String(formattedHours).padStart(2, '0')}:${minutes.padStart(2, '0')}:00`; // Add seconds as ":00"
+
+  const requestBody = {
+    date: `${bookingDateInput.value}T${formattedTime}`, // Combine date and time in ISO format
+    booking: {
+      name: formData.get('name'),
+      email: formData.get('email'),
+      company: formData.get('company'),
+      country: formData.get('country'),
+      whatsapp: formData.get('whatsapp') || null, // Optional field
+      notes: formData.get('notes') || null, // Optional field
+    },
+  };
+
+  console.log("Request Body:", JSON.stringify(requestBody, null, 2));
+
+  try {
+    const response = await fetch('http://localhost:8000/booking/book_slot', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      throw new Error('Booking failed');
+    }
+
+    const result = await response.json();
+    alert('Appointment booked successfully!');
+
+    // Reset form and go back to step 1
+    bookingForm.reset();
+    step3.classList.add('hidden');
+    step1.classList.remove('hidden');
+  } catch (error) {
+    console.error('Error booking appointment:', error);
+    alert('Failed to book appointment. Please try again.');
+  } finally {
+    hideLoading();
+  }
+});
+      
+      // Function to render the calendar
+      function renderCalendar() {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        
+        // Update month and year display
+        const monthName = new Date(year, month, 1).toLocaleString('default', { month: 'long' });
+        monthYearElement.textContent = `${monthName} ${year}`;
+        
+        // Clear previous calendar days
+        calendarDays.innerHTML = '';
+        
+        // Get first day of month and number of days in month
+        const firstDayOfMonth = new Date(year, month, 1).getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        
+        // Add empty cells for days before the first day of the month
+        for (let i = 0; i < firstDayOfMonth; i++) {
+          const emptyDay = document.createElement('div');
+          emptyDay.className = 'w-10 h-10';
+          calendarDays.appendChild(emptyDay);
+        }
+        
+        // Get today's date for comparison
+        const today = new Date();
+        const currentDay = today.getDate();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        
+        // Add days of the month
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dayElement = document.createElement('button');
+          dayElement.textContent = day;
+          
+          // Check if this day is the selected date
+          const isSelected = 
+            selectedDate.getDate() === day && 
+            selectedDate.getMonth() === month && 
+            selectedDate.getFullYear() === year;
+          
+          // Check if this day is in the past
+          const isPast = 
+            (year < currentYear) || 
+            (year === currentYear && month < currentMonth) || 
+            (year === currentYear && month === currentMonth && day < currentDay);
+          
+          // Apply appropriate classes
+          dayElement.className = 'w-10 h-10 rounded-full flex items-center justify-center';
+          
+          if (isSelected) {
+            dayElement.classList.add('bg-orange-500', 'text-white');
+          } else if (isPast) {
+            dayElement.classList.add('text-gray-300', 'cursor-not-allowed');
+          } else {
+            dayElement.classList.add('text-orange-500');
+          }
+          
+          // Add click event to select date (only for non-past dates)
+          if (!isPast) {
+            dayElement.addEventListener('click', () => {
+              selectedDate = new Date(year, month, day);
+              updateSelectedDateText();
+              fetchAvailableTimeSlots(selectedDate);
+              renderCalendar();
+            });
+          } else {
+            dayElement.disabled = true;
+          }
+          
+          calendarDays.appendChild(dayElement);
+        }
+      }
+      
+      // Function to update the selected date text
+      function updateSelectedDateText() {
+        const dayOfWeek = selectedDate.toLocaleString('default', { weekday: 'long' });
+        const month = selectedDate.toLocaleString('default', { month: 'long' });
+        const dayOfMonth = selectedDate.getDate();
+        
+        selectedDateText.textContent = `${dayOfWeek}, ${month} ${dayOfMonth}`;
+      }
+      
+      // Function to render time slots
+      function renderTimeSlots() {
+        timeSlotsContainer.innerHTML = '';
+        
+        if (availableTimeSlots.length === 0) {
+          timeSlotsContainer.innerHTML = '<div class="text-center py-8 text-gray-500">No available time slots for this date</div>';
+          return;
+        }
+        
+        availableTimeSlots.forEach(time => {
+          const timeButton = document.createElement('button');
+          timeButton.textContent = time;
+          timeButton.className = 'w-full py-3 px-4 border border-gray-200 rounded-lg text-center text-orange-500 hover:border-orange-300';
+          
+          timeButton.addEventListener('click', () => {
+            selectedTime = time;
+            selectedTimeDisplay.textContent = time;
+            step1.classList.add('hidden');
+            step2.classList.remove('hidden');
+          });
+          
+          timeSlotsContainer.appendChild(timeButton);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
